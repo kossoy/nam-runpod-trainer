@@ -6,7 +6,7 @@ export NAM_VERSION="${NAM_VERSION:-0.12.2}"
 
 if command -v apt-get >/dev/null 2>&1; then
   apt-get update -qq
-  apt-get install -y -qq git curl python3-tk tk libx11-6 >/tmp/nam-apt.log
+  apt-get install -y -qq git curl python3-venv python3-tk tk libx11-6 >/tmp/nam-apt.log
 fi
 
 if ! command -v uv >/dev/null 2>&1; then
@@ -14,9 +14,10 @@ if ! command -v uv >/dev/null 2>&1; then
   ln -sf /root/.local/bin/uv /usr/local/bin/uv
 fi
 
-uv pip install --system "neural-amp-modeler==${NAM_VERSION}" >/tmp/nam-uv-install.log
+uv venv /workspace/nam/.venv --python python3 >/tmp/nam-uv-venv.log
+uv pip install --python /workspace/nam/.venv/bin/python "neural-amp-modeler==${NAM_VERSION}" >/tmp/nam-uv-install.log
 
-python3 - <<'PY'
+/workspace/nam/.venv/bin/python - <<'PY'
 import tkinter  # noqa: F401
 import torch
 import nam
@@ -27,4 +28,3 @@ if torch.cuda.is_available():
 print("nam", getattr(nam, "__version__", "unknown"))
 print("setup ok")
 PY
-

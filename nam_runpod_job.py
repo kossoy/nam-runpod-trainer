@@ -235,7 +235,7 @@ def start_training(ip: str, port: int, key: Path, args: dict[str, Any]) -> None:
     model = args["model_name"]
     run_dir = f"/workspace/nam/runs/{model}"
     train_argv = [
-        "python3",
+        "/workspace/nam/.venv/bin/python",
         "/workspace/nam/repo/nam_pod/train.py",
         "--input",
         "/workspace/nam/data/input.wav",
@@ -299,7 +299,7 @@ fi
 
 def print_status(ip: str, port: int, key: Path, args: dict[str, Any]) -> None:
     remote = (
-        f"python3 /workspace/nam/repo/nam_pod/status.py "
+        f"/workspace/nam/.venv/bin/python /workspace/nam/repo/nam_pod/status.py "
         f"{shlex.quote(args['model_name'])} {int(args['epochs'])}"
     )
     result = ssh_cmd(ip, port, key, remote, capture=True, check=False)
