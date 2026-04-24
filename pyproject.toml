@@ -1,0 +1,10 @@
+[project]
+name = "nam-runpod-trainer"
+version = "0.1.0"
+description = "Small public-safe helper repo for training Neural Amp Modeler captures on RunPod pods."
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.ruff]
+line-length = 100
+

@@ -1,0 +1,22 @@
+.DS_Store
+.env
+.venv/
+uv.lock
+__pycache__/
+*.pyc
+
+# Never commit audio, models, logs, or API material.
+*.wav
+*.aif
+*.aiff
+*.flac
+*.nam
+*.ckpt
+*.png
+*.log
+*.pid
+summary.json
+results/
+runs/
+data/
+configs/*.local.json
