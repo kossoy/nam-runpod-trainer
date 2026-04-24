@@ -19,7 +19,7 @@ git commit -m "Initial NAM RunPod trainer"
 gh repo create nam-runpod-trainer --public --source=. --remote=origin --push
 ```
 
-After publishing, replace `https://github.com/<you>/nam-runpod-trainer.git` in commands/configs with the real URL.
+When running from a cloned GitHub repo, `repo_url` is inferred from `origin`.
 
 ## Security
 
@@ -45,7 +45,6 @@ cd nam-runpod-trainer
 export RUNPOD_API_KEY='your-runpod-api-key'
 
 uv run nam_runpod_job.py \
-  --repo-url https://github.com/<you>/nam-runpod-trainer.git \
   --input "/absolute/path/to/input.wav" \
   --output "/absolute/path/to/output.wav" \
   --result-dir "/absolute/path/to/results" \

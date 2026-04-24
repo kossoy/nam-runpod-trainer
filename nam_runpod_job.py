@@ -17,6 +17,7 @@ from typing import Any
 API_BASE = "https://rest.runpod.io/v1"
 
 DEFAULTS: dict[str, Any] = {
+    "repo_url": "",
     "result_dir": "results",
     "epochs": 1000,
     "architecture": "standard",
@@ -137,12 +138,33 @@ def parse_args() -> dict[str, Any]:
         if value is not None:
             merged[key] = value
 
+    if not merged.get("repo_url"):
+        merged["repo_url"] = infer_repo_url()
+
     required = ["repo_url", "input", "output", "model_name", "gear_type"]
     missing = [key for key in required if not merged.get(key)]
     if missing:
         raise SystemExit(f"Missing required args: {', '.join(missing)}")
 
     return merged
+
+
+def infer_repo_url() -> str:
+    try:
+        result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return ""
+
+    url = result.stdout.strip()
+    if url.startswith("git@github.com:"):
+        return "https://github.com/" + url.removeprefix("git@github.com:")
+    return url
 
 
 def run(cmd: list[str], *, check: bool = True, capture: bool = False) -> subprocess.CompletedProcess[str]:
