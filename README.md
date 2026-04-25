@@ -10,17 +10,6 @@ It does three things:
 
 No API keys, audio, models, or logs belong in this repo.
 
-## Publish To GitHub
-
-```bash
-cd nam-runpod-trainer
-git add .
-git commit -m "Initial NAM RunPod trainer"
-gh repo create nam-runpod-trainer --public --source=. --remote=origin --push
-```
-
-When running from a cloned GitHub repo, `repo_url` is inferred from `origin`.
-
 ## Security
 
 If an API key was pasted into chat, revoke it in RunPod and create a new one:
