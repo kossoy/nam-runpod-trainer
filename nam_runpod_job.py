@@ -98,7 +98,8 @@ class RunPodClient:
             "minRAMPerGPU": 8,
             "minVCPUPerGPU": 2,
             "interruptible": False,
-            "locked": False,
+        "locked": False,
+        "env": {"PUBLIC_KEY": load_public_key(args["ssh_key"])},
         }
         return self.request("POST", "/pods", payload)
 
@@ -208,6 +209,13 @@ def infer_repo_ref() -> str:
     return result.stdout.strip()
 
 
+def load_public_key(private_key: str) -> str:
+    public_key = Path(f"{Path(private_key).expanduser()}.pub")
+    if not public_key.exists():
+        raise SystemExit(f"Missing SSH public key: {public_key}")
+    return public_key.read_text().strip()
+
+
 def run(cmd: list[str], *, check: bool = True, capture: bool = False) -> subprocess.CompletedProcess[str]:
     print("+", " ".join(shlex.quote(part) for part in cmd))
     return subprocess.run(
@@ -301,7 +309,7 @@ def start_training(ip: str, port: int, key: Path, args: dict[str, Any]) -> None:
     model = args["model_name"]
     run_dir = f"/workspace/nam/runs/{model}"
     train_argv = [
-        "/workspace/nam/.venv/bin/python",
+        "python3",
         "/workspace/nam/repo/nam_pod/train.py",
         "--input",
         "/workspace/nam/data/input.wav",
@@ -370,7 +378,7 @@ fi
 
 def print_status(ip: str, port: int, key: Path, args: dict[str, Any]) -> None:
     remote = (
-        f"/workspace/nam/.venv/bin/python /workspace/nam/repo/nam_pod/status.py "
+        f"python3 /workspace/nam/repo/nam_pod/status.py "
         f"{shlex.quote(args['model_name'])} {int(args['epochs'])}"
     )
     result = ssh_cmd(ip, port, key, remote, capture=True, check=False)
