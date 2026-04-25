@@ -1,0 +1,16 @@
+{
+  "input": "/absolute/path/to/input.wav",
+  "output": "/absolute/path/to/output.wav",
+  "result_dir": "/absolute/path/to/results",
+  "model_name": "my-amp-rp4090-a1",
+  "epochs": 1000,
+  "architecture": "standard",
+  "batch_size": 16,
+  "ny": 8192,
+  "gear_type": "amp",
+  "gear_make": "YourMaker",
+  "gear_model": "YourModel",
+  "tone_type": "hi_gain",
+  "modeled_by": "your-name",
+  "delete_policy": "success"
+}

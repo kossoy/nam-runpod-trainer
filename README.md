@@ -1,104 +1,93 @@
 # NAM RunPod Trainer
 
-Tiny public-safe repo for training Neural Amp Modeler captures on disposable RunPod pods.
+Train a Neural Amp Modeler capture on a disposable RunPod pod from a single command on your laptop.
 
-It does three things:
+## What it does
 
-1. Creates an RTX 4090 pod through RunPod REST API.
-2. Uploads `input.wav` and captured `output.wav`.
-3. Clones this repo inside the pod, trains NAM, downloads `.nam`/plot/log, then deletes the pod.
+- Creates an RTX 4090 pod via RunPod REST API.
+- Uploads `input.wav` + your captured output, clones this repo inside the pod, runs NAM training, downloads `.nam` + plot + log, deletes the pod.
 
-No API keys, audio, models, or logs belong in this repo.
+## Prerequisites
 
-## Security
-
-If an API key was pasted into chat, revoke it in RunPod and create a new one:
-
-[RunPod API Keys](https://console.runpod.io/user/settings)
-
-Use it only as an environment variable:
+- [`uv`](https://docs.astral.sh/uv/) installed locally.
+- An SSH key (`~/.ssh/id_ed25519` by default) added to your RunPod account.
+- `RUNPOD_API_KEY` exported in the shell.
 
 ```bash
 export RUNPOD_API_KEY='your-runpod-api-key'
 ```
 
-Do not commit `.env`.
+## Run
 
-## Local One-Shot Run
-
-From your Mac:
+With CLI flags:
 
 ```bash
-cd nam-runpod-trainer
-
-export RUNPOD_API_KEY='your-runpod-api-key'
-
-uv run nam_runpod_job.py \
-  --input "/absolute/path/to/input.wav" \
-  --output "/absolute/path/to/output.wav" \
-  --result-dir "/absolute/path/to/results" \
-  --model-name axefx-brootalz-amponly-cabless-paon-rp4090-a2 \
+uv run nam-train \
+  --input "/path/to/input.wav" \
+  --output "/path/to/output.wav" \
+  --result-dir "/path/to/results" \
+  --model-name my-amp-rp4090-a1 \
   --gear-type amp \
-  --gear-make "Fractal Audio" \
-  --gear-model "Axe-FX III / Example Amp" \
-  --tone-type hi_gain \
+  --gear-make "YourMaker" \
+  --gear-model "YourModel" \
   --modeled-by your-name \
-  --epochs 1000 \
-  --delete-policy success
+  --epochs 1000
 ```
 
-`--delete-policy success` deletes the pod only after results are downloaded.
-Use `--delete-policy always` if you want to delete even after failure.
-
-## Config File Run
+With a config file:
 
 ```bash
-cp configs/amp-only.example.json configs/amp-only.local.json
-# edit input/output/result/model metadata paths
+cp configs/example.json configs/local.json
+$EDITOR configs/local.json
 
-RUNPOD_API_KEY='your-runpod-api-key' uv run nam_runpod_job.py --config configs/amp-only.local.json
+uv run nam-train --config configs/local.json
 ```
 
-## Manual Pod Run
+CLI flags override config values; config overrides defaults.
 
-If you already created a pod manually:
+## Check progress via SSH
+
+The orchestrator prints a copy-paste SSH line as soon as the pod is reachable:
+
+```
+SSH ready. Connect with:
+  ssh -p <port> -i ~/.ssh/id_ed25519 root@<ip>
+```
+
+Inside the pod, view live status:
 
 ```bash
-ssh root@<ip> -p <port> -i ~/.ssh/id_ed25519
-
-git clone https://github.com/<you>/nam-runpod-trainer.git /workspace/nam-runpod-trainer
-cd /workspace/nam-runpod-trainer
-bash scripts/setup_pod.sh
-
-mkdir -p /workspace/nam/data /workspace/nam/runs
-# upload input.wav and output.wav to /workspace/nam/data first
-
-python3 nam_pod/train.py \
-  --input /workspace/nam/data/input.wav \
-  --output /workspace/nam/data/output.wav \
-  --run-dir /workspace/nam/runs/axefx-brootalz-amponly-cabless-paon-rp4090-a1 \
-  --model-name axefx-brootalz-amponly-cabless-paon-rp4090-a1 \
-  --epochs 1000 \
-  --gear-type amp \
-  --gear-make "Fractal Audio" \
-  --gear-model "Axe-FX III / Example Amp" \
-  --tone-type hi_gain \
-  --modeled-by your-name
+/workspace/nam/.venv/bin/python /workspace/nam/repo/pod/status.py <model-name>
 ```
 
-Status:
+It shows: process pid + elapsed, current/total epoch, throughput (epochs/min), ETA, best ESR so far, GPU utilization, and a tail of `train.log`.
 
-```bash
-python3 nam_pod/status.py axefx-brootalz-amponly-cabless-paon-rp4090-a1 1000
-```
+## Delete policies
+
+- `--delete-policy success` (default) — delete only after results are downloaded.
+- `--delete-policy always` — delete even on failure.
+- `--delete-policy never` — keep the pod (useful for debugging; remember to delete it manually).
+
+## Troubleshooting
+
+- `train.log` is downloaded first, so you have it even when training fails.
+- Results land in `--result-dir`: `<model>.nam`, `<model>.png`, `summary.json`, `train.log`.
+- If `repo_url` cannot be inferred (no `origin` remote), pass `--repo-url https://github.com/<you>/<repo>.git`.
 
 ## Defaults
 
-- Pod image: `runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404`
+- Image: `runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404`
 - GPU: `NVIDIA GeForce RTX 4090`
-- Cloud type: `COMMUNITY`
-- NAM package: `neural-amp-modeler==0.12.2`
-- Training: `standard`, `batch_size=16`, `ny=8192`, `epochs=1000`
+- Cloud: `COMMUNITY`
+- NAM: `neural-amp-modeler==0.12.2`
+- Training: `architecture=standard`, `batch_size=16`, `ny=8192`, `epochs=1000`
+
+## Run tests
+
+```bash
+uv sync --extra dev
+uv run pytest -v
+```
 
 ## References
 

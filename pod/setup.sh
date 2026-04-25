@@ -14,9 +14,14 @@ if ! command -v uv >/dev/null 2>&1; then
   ln -sf /root/.local/bin/uv /usr/local/bin/uv
 fi
 
-uv pip install --system --break-system-packages "neural-amp-modeler==${NAM_VERSION}" >/tmp/nam-uv-install.log
+rm -rf /workspace/nam/.venv
+uv venv /workspace/nam/.venv --python python3 --system-site-packages >/tmp/nam-uv-venv.log
+UV_LINK_MODE=copy uv pip install \
+  --python /workspace/nam/.venv/bin/python \
+  "neural-amp-modeler==${NAM_VERSION}" \
+  >/tmp/nam-uv-install.log
 
-python3 - <<'PY'
+/workspace/nam/.venv/bin/python - <<'PY'
 import tkinter  # noqa: F401
 import torch
 import nam
