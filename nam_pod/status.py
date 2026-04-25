@@ -7,7 +7,7 @@ import sys
 
 
 run_name = sys.argv[1] if len(sys.argv) > 1 else ""
-total_epochs = sys.argv[2] if len(sys.argv) > 2 else "1000"
+total_epochs = sys.argv[2] if len(sys.argv) > 2 else "unknown"
 if not run_name:
     raise SystemExit("Usage: status.py <run_name> [total_epochs]")
 
@@ -27,21 +27,23 @@ def shell(cmd: str) -> str:
         return ""
 
 
-ps_lines = shell(
-    "ps -eo pid,etime,pcpu,pmem,cmd | grep -E 'nam_pod/train.py|train_runpod_nam|train_nam' | grep -v grep"
-).splitlines()
-
 elapsed = None
 pcpu = None
 pmem = None
-for line in ps_lines:
-    if run_name in line or "nam_pod/train.py" in line:
-        parts = line.split(None, 4)
+pid_path = run / "train.pid"
+if pid_path.exists():
+    pid = pid_path.read_text().strip()
+    if pid:
+        line = shell(f"ps -p {pid} -o etime=,pcpu=,pmem=,cmd=")
+        parts = line.split(None, 3)
         if len(parts) >= 5:
             elapsed = parts[1]
             pcpu = parts[2]
             pmem = parts[3]
-            break
+        elif len(parts) >= 3:
+            elapsed = parts[0]
+            pcpu = parts[1]
+            pmem = parts[2]
 
 gpu = shell(
     "nvidia-smi --query-gpu=utilization.gpu,utilization.memory,memory.used,memory.total "
@@ -68,6 +70,7 @@ summary_path = run / "summary.json"
 summary = None
 if summary_path.exists():
     summary = json.loads(summary_path.read_text())
+    total_epochs = str(summary.get("epochs") or total_epochs)
 
 final_nams = sorted(run.glob("*.nam")) if run.exists() else []
 final_pngs = sorted(run.glob("*.png")) if run.exists() else []
@@ -93,4 +96,3 @@ for path in final_pngs:
     print(f"plot: {path}")
 if train_log.exists():
     print(f"log: {train_log}")
-

@@ -65,7 +65,7 @@ Use `--delete-policy always` if you want to delete even after failure.
 
 ```bash
 cp configs/amp-only.example.json configs/amp-only.local.json
-# edit repo_url/model/output path if needed
+# edit input/output/result/model metadata paths
 
 RUNPOD_API_KEY='your-runpod-api-key' uv run nam_runpod_job.py --config configs/amp-only.local.json
 ```

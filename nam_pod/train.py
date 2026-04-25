@@ -5,9 +5,8 @@ import re
 import shutil
 from pathlib import Path
 
-import torch
-from nam.models.metadata import GearType, ToneType, UserMetadata
-from nam.train.core import train
+GEAR_TYPES = ["amp", "pedal", "pedal_amp", "amp_cab", "amp_pedal_cab", "preamp", "studio"]
+TONE_TYPES = ["clean", "overdrive", "crunch", "hi_gain", "fuzz"]
 
 
 def parse_args() -> argparse.Namespace:
@@ -20,11 +19,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--architecture", default="standard")
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--ny", type=int, default=8192)
-    parser.add_argument("--gear-type", choices=[item.value for item in GearType], required=True)
-    parser.add_argument("--gear-make", default="Fractal Audio")
-    parser.add_argument("--gear-model", default="Axe-FX III")
-    parser.add_argument("--tone-type", choices=[item.value for item in ToneType], default="hi_gain")
-    parser.add_argument("--modeled-by", default="modeler")
+    parser.add_argument("--gear-type", choices=GEAR_TYPES, required=True)
+    parser.add_argument("--gear-make", required=True)
+    parser.add_argument("--gear-model", required=True)
+    parser.add_argument("--tone-type", choices=TONE_TYPES, default="hi_gain")
+    parser.add_argument("--modeled-by", required=True)
     return parser.parse_args()
 
 
@@ -50,6 +49,10 @@ def find_best_nam(run_dir: Path) -> tuple[Path, float | None, int | None]:
 
 
 def main() -> None:
+    import torch
+    from nam.models.metadata import GearType, ToneType, UserMetadata
+    from nam.train.core import train
+
     args = parse_args()
     run_dir = Path(args.run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)

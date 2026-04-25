@@ -1,5 +1,5 @@
 {
-  "repo_url": "https://github.com/<you>/nam-runpod-trainer.git",
+  "repo_url": "",
   "input": "/absolute/path/to/input.wav",
   "output": "/absolute/path/to/output.wav",
   "result_dir": "/absolute/path/to/results",

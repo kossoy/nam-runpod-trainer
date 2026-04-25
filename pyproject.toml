@@ -5,6 +5,8 @@ description = "Small public-safe helper repo for training Neural Amp Modeler cap
 requires-python = ">=3.11"
 dependencies = []
 
+[project.scripts]
+nam-runpod = "nam_runpod_job:main"
+
 [tool.ruff]
 line-length = 100
-

@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import shlex
+import socket
 import subprocess
 import sys
 import time
@@ -18,15 +19,13 @@ API_BASE = "https://rest.runpod.io/v1"
 
 DEFAULTS: dict[str, Any] = {
     "repo_url": "",
+    "repo_ref": "",
     "result_dir": "results",
     "epochs": 1000,
     "architecture": "standard",
     "batch_size": 16,
     "ny": 8192,
-    "gear_make": "Fractal Audio",
-    "gear_model": "Axe-FX III",
     "tone_type": "hi_gain",
-    "modeled_by": "modeler",
     "pod_name": "nam-train-4090",
     "gpu_type": "NVIDIA GeForce RTX 4090",
     "cloud_type": "COMMUNITY",
@@ -45,26 +44,42 @@ class RunPodClient:
     def __init__(self, api_key: str) -> None:
         self.api_key = api_key
 
-    def request(self, method: str, path: str, payload: dict[str, Any] | None = None) -> Any:
+    def request(
+        self,
+        method: str,
+        path: str,
+        payload: dict[str, Any] | None = None,
+        *,
+        retries: int = 0,
+    ) -> Any:
         body = None if payload is None else json.dumps(payload).encode()
-        request = urllib.request.Request(
-            f"{API_BASE}{path}",
-            data=body,
-            method=method,
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=60) as response:
-                raw = response.read()
-                if not raw:
-                    return None
-                return json.loads(raw.decode())
-        except urllib.error.HTTPError as error:
-            detail = error.read().decode(errors="replace")
-            raise RuntimeError(f"RunPod API {method} {path} failed: {error.code} {detail}") from error
+        for attempt in range(retries + 1):
+            request = urllib.request.Request(
+                f"{API_BASE}{path}",
+                data=body,
+                method=method,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=60) as response:
+                    raw = response.read()
+                    if not raw:
+                        return None
+                    return json.loads(raw.decode())
+            except urllib.error.HTTPError as error:
+                detail = error.read().decode(errors="replace")
+                if error.code < 500 or attempt >= retries:
+                    raise RuntimeError(
+                        f"RunPod API {method} {path} failed: {error.code} {detail}"
+                    ) from error
+            except (urllib.error.URLError, TimeoutError, socket.timeout) as error:
+                if attempt >= retries:
+                    raise RuntimeError(f"RunPod API {method} {path} failed: {error}") from error
+            time.sleep(min(2**attempt, 20))
+        raise RuntimeError(f"RunPod API {method} {path} failed after retries")
 
     def create_pod(self, args: dict[str, Any]) -> dict[str, Any]:
         payload = {
@@ -88,16 +103,17 @@ class RunPodClient:
         return self.request("POST", "/pods", payload)
 
     def get_pod(self, pod_id: str) -> dict[str, Any]:
-        return self.request("GET", f"/pods/{pod_id}")
+        return self.request("GET", f"/pods/{pod_id}", retries=5)
 
     def delete_pod(self, pod_id: str) -> None:
-        self.request("DELETE", f"/pods/{pod_id}")
+        self.request("DELETE", f"/pods/{pod_id}", retries=5)
 
 
 def parse_args() -> dict[str, Any]:
     parser = argparse.ArgumentParser(description="Create a RunPod pod, train NAM, download, delete.")
     parser.add_argument("--config")
     parser.add_argument("--repo-url")
+    parser.add_argument("--repo-ref")
     parser.add_argument("--input")
     parser.add_argument("--output")
     parser.add_argument("--result-dir")
@@ -140,8 +156,19 @@ def parse_args() -> dict[str, Any]:
 
     if not merged.get("repo_url"):
         merged["repo_url"] = infer_repo_url()
+    if not merged.get("repo_ref"):
+        merged["repo_ref"] = infer_repo_ref()
 
-    required = ["repo_url", "input", "output", "model_name", "gear_type"]
+    required = [
+        "repo_url",
+        "input",
+        "output",
+        "model_name",
+        "gear_type",
+        "gear_make",
+        "gear_model",
+        "modeled_by",
+    ]
     missing = [key for key in required if not merged.get(key)]
     if missing:
         raise SystemExit(f"Missing required args: {', '.join(missing)}")
@@ -165,6 +192,20 @@ def infer_repo_url() -> str:
     if url.startswith("git@github.com:"):
         return "https://github.com/" + url.removeprefix("git@github.com:")
     return url
+
+
+def infer_repo_ref() -> str:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return ""
+    return result.stdout.strip()
 
 
 def run(cmd: list[str], *, check: bool = True, capture: bool = False) -> subprocess.CompletedProcess[str]:
@@ -214,8 +255,8 @@ def scp_to(ip: str, port: int, key: Path, src: Path, dst: str) -> None:
     )
 
 
-def scp_from(ip: str, port: int, key: Path, src: str, dst_dir: Path) -> None:
-    run(
+def scp_from(ip: str, port: int, key: Path, src: str, dst_dir: Path, *, check: bool = True) -> bool:
+    result = run(
         [
             "scp",
             "-P",
@@ -224,8 +265,10 @@ def scp_from(ip: str, port: int, key: Path, src: str, dst_dir: Path) -> None:
             str(key),
             f"root@{ip}:{src}",
             str(dst_dir),
-        ]
+        ],
+        check=check,
     )
+    return result.returncode == 0
 
 
 def ssh_ready(ip: str, port: int, key: Path) -> bool:
@@ -248,6 +291,7 @@ def wait_for_ssh(client: RunPodClient, pod_id: str, key: Path, timeout: int) -> 
         status = pod.get("desiredStatus") or "unknown"
         print(f"pod {pod_id}: status={status} ssh={ip}:{port}")
         if ip and port and ssh_ready(ip, port, key):
+            print(f"SSH ready: ssh -p {port} -i {key} root@{ip}")
             return ip, port
         time.sleep(10)
     raise TimeoutError(f"SSH did not become ready within {timeout}s for pod {pod_id}")
@@ -287,15 +331,20 @@ def start_training(ip: str, port: int, key: Path, args: dict[str, Any]) -> None:
         args["modeled_by"],
     ]
     train_cmd = " ".join(shlex.quote(part) for part in train_argv)
+    checkout = ""
+    if args.get("repo_ref"):
+        checkout = f"git checkout --detach {shlex.quote(args['repo_ref'])}"
+
     remote = f"""
 set -euo pipefail
 mkdir -p /workspace/nam/data /workspace/nam/runs
 rm -rf /workspace/nam/repo
-git clone --depth 1 {shlex.quote(args["repo_url"])} /workspace/nam/repo
+git clone {shlex.quote(args["repo_url"])} /workspace/nam/repo
 cd /workspace/nam/repo
+{checkout}
 bash scripts/setup_pod.sh
 mkdir -p {shlex.quote(run_dir)}
-nohup {train_cmd} > {shlex.quote(run_dir)}/train.log 2>&1 &
+setsid bash -lc {shlex.quote(f"exec {train_cmd} > {shlex.quote(run_dir)}/train.log 2>&1 < /dev/null")} &
 echo $! > {shlex.quote(run_dir)}/train.pid
 echo "started pid=$(cat {shlex.quote(run_dir)}/train.pid)"
 """
@@ -354,9 +403,16 @@ def download_results(ip: str, port: int, key: Path, args: dict[str, Any]) -> Non
     result_dir.mkdir(parents=True, exist_ok=True)
     model = args["model_name"]
     run_dir = f"/workspace/nam/runs/{model}"
+    missing = []
     for filename in [f"{model}.nam", f"{model}.png", "summary.json", "train.log"]:
-        scp_from(ip, port, key, f"{run_dir}/{filename}", result_dir)
+        ok = scp_from(ip, port, key, f"{run_dir}/{filename}", result_dir, check=False)
+        if not ok:
+            missing.append(filename)
     print(f"Downloaded results to {result_dir}")
+    if missing:
+        print(f"Missing remote result files: {', '.join(missing)}")
+    if f"{model}.nam" in missing:
+        raise RuntimeError("Final .nam was not downloaded")
 
 
 def main() -> None:
@@ -376,6 +432,10 @@ def main() -> None:
         raise SystemExit(f"Missing output file: {output_path}")
     if not ssh_key.exists():
         raise SystemExit(f"Missing SSH key: {ssh_key}")
+    if input_path.suffix.lower() != ".wav":
+        raise SystemExit(f"Input file must be .wav: {input_path}")
+    if output_path.suffix.lower() != ".wav":
+        raise SystemExit(f"Output file must be .wav: {output_path}")
 
     api_key = os.environ.get("RUNPOD_API_KEY")
     if not api_key:
